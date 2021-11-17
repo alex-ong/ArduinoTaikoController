@@ -1,12 +1,13 @@
 #include "AnalogReadNow.h"
-
-//#define DEBUG_OUTPUT
+#include "FastADC.h"
+#define FASTADC
+#define DEBUG_OUTPUT
 //#define DEBUG_OUTPUT_LIVE
 //#define DEBUG_TIME
-//#define DEBUG_DATA
+#define DEBUG_DATA
 
-//#define ENABLE_KEYBOARD
-#define ENABLE_NS_JOYSTICK
+#define ENABLE_KEYBOARD
+//#define ENABLE_NS_JOYSTICK
 
 //#define HAS_BUTTONS
 
@@ -48,13 +49,13 @@ const int hat_mapping[16] = {
 #endif
 
 const int min_threshold = 15;
-const long cd_length = 10000;
-const float k_threshold = 1.5;
-const float k_decay = 0.97;
+const long cd_length = 30000;
+const float k_threshold = 2.0;
+const float k_decay = 0.9;
 
 const int pin[4] = {A0, A3, A1, A2};
 const int key[4] = {'d', 'f', 'j', 'k'};
-const float sens[4] = {1.0, 1.0, 1.0, 1.0};
+const float sens[4] = {1.0, 1.4, 1.3, 1.0};
 
 const int key_next[4] = {3, 2, 0, 1};
 
@@ -63,7 +64,7 @@ const long cd_stageselect = 200000;
 bool stageselect = false;
 bool stageresult = false;
 
-float threshold = 20;
+float threshold = 0;
 int raw[4] = {0, 0, 0, 0};
 float level[4] = {0, 0, 0, 0};
 long cd[4] = {0, 0, 0, 0};
@@ -94,8 +95,8 @@ void sampleSingle(int i) {
 }
 
 void setup() {
-  analogReference(DEFAULT);
-  analogSwitchPin(pin[0]);
+  SetFastADC();
+  
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
 #ifdef ENABLE_NS_JOYSTICK
@@ -106,7 +107,7 @@ void setup() {
   Keyboard.begin();
 #endif
   t0 = micros();
-  Serial.begin(9600);
+  Serial.begin(115200);
 }
 
 void parseSerial() {
@@ -172,8 +173,6 @@ void loop_test2() {
 
 void loop() {
   //loop_test2(); return;
-  
-  static int si = 0;
 
 #ifdef ENABLE_KEYBOARD
   parseSerial();
@@ -184,13 +183,11 @@ void loop() {
   sdt += dt;
   t0 = t1;
   
-  float prev_level = level[si];
-  sampleSingle(si);
-  float new_level = level[si];
-  level[si] = (level[si] + prev_level * 2) / 3;
   
+  sample(); 
   threshold *= k_decay;
 
+  //release on cooldown
   for (int i = 0; i != 4; ++i) {
     if (cd[i] > 0) {
       cd[i] -= dt;
@@ -209,14 +206,14 @@ void loop() {
   int i_max = 0;
   int level_max = 0;
   
-  for (int i = 0; i != 4; ++i) {
+  for (int i = 0; i < 4; ++i) {
     if (level[i] > level_max && level[i] > threshold) {
       level_max = level[i];
       i_max = i;
     }
   }
 
-  if (i_max == si && level_max >= min_threshold) {
+  if (level_max > threshold && level_max > min_threshold) {
     if (cd[i_max] == 0) {
       if (!down[i_max]) {
 #ifdef DEBUG_DATA
@@ -229,7 +226,7 @@ void loop() {
         Serial.print(level[3], 1);
         Serial.print("\n");
 #endif
-#ifdef ENABLE_KEYBOARD
+#ifdef ENABLE_KEYBOARD    
         if (stageresult) {
           Keyboard.press(KEY_ESC);
         } else {
@@ -241,11 +238,15 @@ void loop() {
         if (down_count[i_max] <= 2) down_count[i_max] += 2;
 #endif
       }
-      for (int i = 0; i != 4; ++i)
+      //extend cooldown whenever we go above threshold
+      for (int i = 0; i < 4; ++i)
         cd[i] = cd_length;
+        
 #ifdef ENABLE_KEYBOARD
-      if (stageselect)
+     
+      if (stageselect)      
         cd[i_max] = cd_stageselect;
+       
 #endif
     }
     sdt = 0;
@@ -282,11 +283,13 @@ void loop() {
       bs[i] = state;
       bc[i] = 15000;
 #ifdef ENABLE_KEYBOARD
+    
       if (state) {
         Keyboard.press(button_key[(bi << 2) + i]);
       } else {
         Keyboard.release(button_key[(bi << 2) + i]);
       }
+      
 #endif
     }
 #ifdef ENABLE_NS_JOYSTICK
@@ -326,7 +329,7 @@ void loop() {
 #ifdef DEBUG_OUTPUT_LIVE
   if (true)
 #else
-  if (printing || (/*down[0] &&*/ threshold > 10))
+  if (printing || (/*down[0] &&*/ threshold > min_threshold))
 #endif
   {
     printing = true;
@@ -351,9 +354,6 @@ void loop() {
     }
   } 
 #endif
-
-  level[si] = new_level;
-  si = key_next[si];
 
   long ddt = 300 - (micros() - t0);
   if(ddt > 3) delayMicroseconds(ddt);
