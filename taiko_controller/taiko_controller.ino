@@ -2,7 +2,7 @@
 #include "AnalogReadNow.h"
 #include "FastADC.h"
 #define FASTADC
-#define DEBUG_OUTPUT
+//#define DEBUG_OUTPUT
 //#define DEBUG_OUTPUT_LIVE
 //#define DEBUG_TIME
 #define DEBUG_DATA
@@ -23,15 +23,15 @@ const int sensor_button[4] = {SWITCH_BTN_ZL, SWITCH_BTN_LCLICK, SWITCH_BTN_RCLIC
 #endif
 
 
-const int min_threshold = 15;
-const long cd_length = 30000;
-const float k_threshold = 2.0;
+const int min_threshold = 20;
+const long cd_length = 50000;
+const float k_threshold = 3.0;
 const float k_decay = 0.9;
 
 const int pin[4] = {A2, A0, A1, A3};
 const int key[4] = {'d', 'f', 'j', 'k'};
 
-const float sens[4] = {1.0, 1.4, 1.0, 1.0};
+const float sens[4] = {1.0, 1.4, 1.0, 1.1};
 
 float threshold = 0;
 int raw[4] = {0, 0, 0, 0};
@@ -189,13 +189,12 @@ void loop() {
       if (!down[i_max]) {
         press(i_max);        
       }
-      for (int i = 0; i < 4; ++i) cd[i] = cd_length;
     }
-  }
-
-  if (cd[i_max] > 0) {
+    for (int i = 0; i < 4; ++i) cd[i] = cd_length;
     threshold = max(threshold, level_max * k_threshold);
   }
+
+
   
   debug_all();
   SendLEDs();
