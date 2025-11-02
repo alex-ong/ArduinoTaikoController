@@ -1,27 +1,9 @@
 #include "LED.h"
 #include "AnalogReadNow.h"
 #include "FastADC.h"
-#define FASTADC
-//#define DEBUG_OUTPUT
-//#define DEBUG_OUTPUT_LIVE
-//#define DEBUG_TIME
-#define DEBUG_DATA
-
-#define ENABLE_KEYBOARD
-//#define ENABLE_NS_JOYSTICK
-
-//#define HAS_BUTTONS
-
-#ifdef ENABLE_KEYBOARD
 #include <Keyboard.h>
-#endif
-
-#ifdef ENABLE_NS_JOYSTICK
-#include "Joystick.h"
-const int led_pin[4] = {8, 9, 10, 11};
-const int sensor_button[4] = {SWITCH_BTN_ZL, SWITCH_BTN_LCLICK, SWITCH_BTN_RCLICK, SWITCH_BTN_ZR};
-#endif
-
+#define FASTADC
+#define DEBUG_STATE
 
 const int min_threshold = 20;
 const long cd_length = 50000;
@@ -34,171 +16,137 @@ const int key[4] = {'d', 'f', 'j', 'k'};
 const float sens[4] = {1.0, 1.4, 1.0, 1.1};
 
 float threshold = 0;
-int raw[4] = {0, 0, 0, 0};
-float level[4] = {0, 0, 0, 0};
-long cd[4] = {0, 0, 0, 0};
-bool down[4] = {false, false, false, false};
-#ifdef ENABLE_NS_JOYSTICK
-uint8_t down_count[4] = {0, 0, 0, 0};
-#endif
+int rawValues[4] = {0, 0, 0, 0};
+float sensorValues[4] = {0, 0, 0, 0};
+long cooldowns[4] = {0, 0, 0, 0};
+bool keyIsDown[4] = {false, false, false, false};
 
 typedef unsigned long time_t;
-time_t t0 = 0;
-time_t dt = 0;
+time_t timeAtStartOfRefresh = 0;
+time_t deltaTime = 0;
 
-void sample() {
-  int prev[4] = {raw[0], raw[1], raw[2], raw[3]};
-  raw[0] = analogRead(pin[0]);
-  raw[1] = analogRead(pin[1]);
-  raw[2] = analogRead(pin[2]);
-  raw[3] = analogRead(pin[3]);
-  for (int i=0; i<4; ++i)
-    level[i] = abs(raw[i] - prev[i]) * sens[i];
+void SamplePiezos() {
+  int prev[4] = {rawValues[0], rawValues[1], rawValues[2], rawValues[3]};
+  rawValues[0] = analogRead(pin[0]);
+  rawValues[1] = analogRead(pin[1]);
+  rawValues[2] = analogRead(pin[2]);
+  rawValues[3] = analogRead(pin[3]);
+  
+  // this bit here is a weird...
+  // its a decay thing...
+  for (int i=0; i<4; ++i) {
+    sensorValues[i] = abs(rawValues[i] - prev[i]) * sens[i];
+  }
 }
 
 
+void press(uint8_t index)
+{
+  if (keyIsDown[index]) 
+  {
+    return;
+  }
+  Keyboard.press(key[index]);
+  
+  UpdateLEDColor(index, true);
+  keyIsDown[index] = true;
+}
+
+void release(uint8_t index)
+{
+  if (!keyIsDown[index]) 
+  {
+    return;
+  }
+
+  Keyboard.release(key[index]);
+  UpdateLEDColor(index, false);
+  keyIsDown[index] = false;
+}
+
+void release_on_cooldown(time_t deltaTime)
+{
+  for (int i = 0; i != 4; ++i) {
+    if (cooldowns[i] > 0) {
+      cooldowns[i] -= deltaTime;
+      if (cooldowns[i] <= 0) {
+        cooldowns[i] = 0;
+        release(i);
+      }
+    }
+  }
+}
+
+void SendDebugState() {
+#ifdef DEBUG_STATE
+  Serial.print("★ RAW: ");
+  for (int i = 0; i < 4; i++) {
+    Serial.print(rawValues[i]);
+    if (i < 3) Serial.print(", ");
+  }
+  Serial.print(" | SENSOR: ");
+  for (int i = 0; i < 4; i++) {
+    Serial.print(sensorValues[i], 4);
+    if (i < 3) Serial.print(", ");
+  }
+  Serial.print(" | KEYS: ");
+  for (int i = 0; i < 4; i++) {
+    Serial.print(keyIsDown[i] ? "1" : "0");
+    if (i < 3) Serial.print(", ");
+  }
+  Serial.print(" | THRESH: ");
+  Serial.print(threshold);
+  Serial.println();
+#endif
+}
+
+// This is a magic function called by Arduino framework once at startup.
+// case matters. It MUST be "setup"
 void setup() {
   SetFastADC();
   SetupLEDs();
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
-#ifdef ENABLE_NS_JOYSTICK
-  for (int i = 0; i < 8; ++i) pinMode(i, INPUT_PULLUP);
-  for (int i = 0; i < 4; ++i) {  digitalWrite(led_pin[i], HIGH); pinMode(led_pin[i], OUTPUT); }
-#endif
-#ifdef ENABLE_KEYBOARD
+
   Keyboard.begin();
-#endif
-  t0 = micros();
+
+  timeAtStartOfRefresh = micros();
   Serial.begin(115200);
 }
 
-
-
-void press(uint8_t index)
-{
-#ifdef DEBUG_DATA
-  Serial.print(level[0], 1);
-  Serial.print("\t");
-  Serial.print(level[1], 1);
-  Serial.print("\t");
-  Serial.print(level[2], 1);
-  Serial.print("\t");
-  Serial.print(level[3], 1);
-  Serial.print("\n");
-#endif
-
-#ifdef ENABLE_KEYBOARD    
-  Keyboard.press(key[index]);
-#endif
-  down[index] = true;
-  UpdateLEDColor(index, true);
-#ifdef ENABLE_NS_JOYSTICK
-  if (down_count[index] <= 2) down_count[index] += 2;
-#endif
-  
-}
-
-void release(uint8_t index)
-{
-  if (down[index]) {
-#ifdef ENABLE_KEYBOARD
-    Keyboard.release(key[index]);
-    UpdateLEDColor(index, false);
-
-#endif
-  }
-  down[index] = false; 
-}
-
-void release_on_cd()
-{
-  //release on cooldown
-  for (int i = 0; i != 4; ++i) {
-    if (cd[i] > 0) {
-      cd[i] -= dt;
-      if (cd[i] <= 0) {
-        cd[i] = 0;
-        if (down[i]) {
-          release(i);
-        }
-      }
-    }
-  }
-}
-
-void debug_all()
-{
-  #ifdef DEBUG_OUTPUT
-  static bool printing = false;
-#ifdef DEBUG_OUTPUT_LIVE
-  if (true)
-#else
-  if (printing || (/*down[0] &&*/ threshold > min_threshold))
-#endif
-  {
-    printing = true;
-    Serial.print(level[0], 1);
-    Serial.print("\t");
-    Serial.print(level[1], 1);
-    Serial.print("\t");
-    Serial.print(level[2], 1);
-    Serial.print("\t");
-    Serial.print(level[3], 1);
-    Serial.print("\t| ");
-    Serial.print(cd[0] == 0 ? "  " : down[0] ? "# " : "* ");
-    Serial.print(cd[1] == 0 ? "  " : down[1] ? "# " : "* ");
-    Serial.print(cd[2] == 0 ? "  " : down[2] ? "# " : "* ");
-    Serial.print(cd[3] == 0 ? "  " : down[3] ? "# " : "* ");
-    Serial.print("|\t");
-    Serial.print(threshold, 1);
-    Serial.println();
-    if(threshold <= 5){
-      Serial.println();
-      printing = false;
-    }
-  } 
-#endif
-
-}
-
+/// This is a magic function called in a loop by arduino framework.
 void loop() {
-  //loop_test2(); return;
+  time_t currentTime = micros();
+  deltaTime = currentTime - timeAtStartOfRefresh;
+  timeAtStartOfRefresh = currentTime;
   
-  time_t t1 = micros();
-  dt = t1 - t0;
-  t0 = t1;
-  
-  sample(); 
+  SamplePiezos(); 
   threshold *= k_decay;
 
-  release_on_cd();
+  release_on_cooldown(deltaTime);
   
-  int i_max = 0;
-  int level_max = 0;
+  // todo: use "inline" function and pointers
+  int maxSensorIndex = 0;
+  float maxSensorValue = 0;
   
   for (int i = 0; i < 4; ++i) {
-    if (level[i] > level_max && level[i] > threshold) {
-      level_max = level[i];
-      i_max = i;
+    if (sensorValues[i] > maxSensorValue && sensorValues[i] > threshold) {
+      maxSensorValue = sensorValues[i];
+      maxSensorIndex = i;
     }
   }
 
-  if (level_max > threshold && level_max > min_threshold) {
-    if (cd[i_max] == 0) {
-      if (!down[i_max]) {
-        press(i_max);        
-      }
+  if (maxSensorValue > threshold && maxSensorValue > min_threshold) {
+    if (cooldowns[maxSensorIndex] == 0) {
+        press(maxSensorIndex);
     }
-    for (int i = 0; i < 4; ++i) cd[i] = cd_length;
-    threshold = max(threshold, level_max * k_threshold);
+    // todo: non-global cooldown
+    for (int i = 0; i < 4; ++i) cooldowns[i] = cd_length;
+    threshold = max(threshold, maxSensorValue * k_threshold);
   }
 
-
-  
-  debug_all();
+  SendDebugState();
   SendLEDs();
-  long ddt = 300 - (micros() - t0);
-  if(ddt > 3) delayMicroseconds(ddt);
-  
+  long delayBeforeNextRefresh = 300 - (micros() - timeAtStartOfRefresh);
+  if(delayBeforeNextRefresh > 3) delayMicroseconds(delayBeforeNextRefresh);
 }

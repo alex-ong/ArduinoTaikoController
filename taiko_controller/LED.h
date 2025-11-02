@@ -20,6 +20,7 @@ void UpdateLEDColor(uint8_t button_idx, bool pressed)
   is_led_on[button_idx] = pressed;
   CRGB color = led_colors[button_idx];
   if (!pressed) color = BLACK;
+  // todo: update region rather than all
   for (int i = 0; i < NUM_LEDS; i++)
   {
     leds[i] = color;
@@ -29,13 +30,15 @@ void UpdateLEDColor(uint8_t button_idx, bool pressed)
 
 void SendLEDs()
 {
-  if (needLEDUpdate)
+  if (!needLEDUpdate) 
   {
-    #if USE_WS2812B
-      FastLED.show();
-    #endif
-    needLEDUpdate = false;
+    return;
   }
+
+  #if USE_WS2812B
+    FastLED.show();
+  #endif
+  needLEDUpdate = false;
 }
 
 void SetupLEDs()
