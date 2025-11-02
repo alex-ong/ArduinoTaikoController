@@ -47,6 +47,15 @@ python main.py COM3
 - **Error Handling**: Gracefully handles connection issues and Unicode errors
 - **Keyboard Interrupt**: Stop monitoring with Ctrl+C
 
+## Architecture
+
+The project uses a **threaded background monitoring** approach:
+
+- **`SerialMonitor`**: Background thread that continuously reads serial data
+- **Thread-safe data storage**: Concurrent access to collected data
+- **Automatic cleanup**: Keeps only the last 10 seconds of data
+- **Structured parsing**: Converts messages into `TaikoDebugData` objects
+
 ## Data Structure
 
 The Arduino sends debug messages in this format:
@@ -59,15 +68,6 @@ This gets parsed into a `TaikoDebugData` object with:
 - **sensor_values**: Processed values with sensitivity applied  
 - **key_states**: Current pressed/released state of 4 keys
 - **threshold**: Dynamic threshold for hit detection
-
-## Testing
-
-Test the parser with sample data:
-```bash
-python test_parser.py
-```
-
-This will verify that the debug message parsing works correctly with sample Arduino output.
 
 ## Troubleshooting
 

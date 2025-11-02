@@ -46,7 +46,7 @@ void press(uint8_t index)
   {
     return;
   }
-  Keyboard.press(key[index]);
+  // Keyboard.press(key[index]);
   
   UpdateLEDColor(index, true);
   keyIsDown[index] = true;
