@@ -1,6 +1,6 @@
-#include "LED.h"
 #include "AnalogReadNow.h"
 #include "FastADC.h"
+#include "LEDKeyboard.h"
 #include <Keyboard.h>
 #define FASTADC
 #define DEBUG_STATE
@@ -18,8 +18,10 @@ const float sens[4] = {1.0, 1.4, 1.0, 1.1};
 float threshold = 0;
 int rawValues[4] = {0, 0, 0, 0};
 float sensorValues[4] = {0, 0, 0, 0};
-long cooldowns[4] = {0, 0, 0, 0};
-bool keyIsDown[4] = {false, false, false, false};
+long cooldown = 0;
+
+LEDKeyboard ledKeyboard;
+
 
 typedef unsigned long time_t;
 time_t timeAtStartOfRefresh = 0;
@@ -39,42 +41,12 @@ void SamplePiezos() {
   }
 }
 
-
-void press(uint8_t index)
+/// Returns whether the cooldown has completed.
+inline bool update_cooldown(time_t deltaTime)
 {
-  if (keyIsDown[index]) 
-  {
-    return;
-  }
-  // Keyboard.press(key[index]);
-  
-  UpdateLEDColor(index, true);
-  keyIsDown[index] = true;
-}
-
-void release(uint8_t index)
-{
-  if (!keyIsDown[index]) 
-  {
-    return;
-  }
-
-  Keyboard.release(key[index]);
-  UpdateLEDColor(index, false);
-  keyIsDown[index] = false;
-}
-
-void release_on_cooldown(time_t deltaTime)
-{
-  for (int i = 0; i != 4; ++i) {
-    if (cooldowns[i] > 0) {
-      cooldowns[i] -= deltaTime;
-      if (cooldowns[i] <= 0) {
-        cooldowns[i] = 0;
-        release(i);
-      }
-    }
-  }
+  cooldown = max(0L, cooldown - deltaTime);
+  if (cooldown == 0) ledKeyboard.release_all();
+  return cooldown == 0;
 }
 
 void SendDebugState() {
@@ -91,7 +63,7 @@ void SendDebugState() {
   }
   Serial.print(" | KEYS: ");
   for (int i = 0; i < 4; i++) {
-    Serial.print(keyIsDown[i] ? "1" : "0");
+    Serial.print(ledKeyboard.isPressed(i) ? "1" : "0");
     if (i < 3) Serial.print(", ");
   }
   Serial.print(" | THRESH: ");
@@ -104,11 +76,9 @@ void SendDebugState() {
 // case matters. It MUST be "setup"
 void setup() {
   SetFastADC();
-  SetupLEDs();
+  ledKeyboard.setup();
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
-
-  Keyboard.begin();
 
   timeAtStartOfRefresh = micros();
   Serial.begin(115200);
@@ -123,9 +93,11 @@ void loop() {
   SamplePiezos(); 
   threshold *= k_decay;
 
-  release_on_cooldown(deltaTime);
-  
-  // todo: use "inline" function and pointers
+  if (!update_cooldown(deltaTime))
+  {
+    return;
+  }
+
   int maxSensorIndex = 0;
   float maxSensorValue = 0;
   
@@ -137,11 +109,10 @@ void loop() {
   }
 
   if (maxSensorValue > threshold && maxSensorValue > min_threshold) {
-    if (cooldowns[maxSensorIndex] == 0) {
-        press(maxSensorIndex);
+    if (cooldown == 0) {
+        ledKeyboard.press(maxSensorIndex);
     }
-    // todo: non-global cooldown
-    for (int i = 0; i < 4; ++i) cooldowns[i] = cd_length;
+    cooldown = cd_length;
     threshold = max(threshold, maxSensorValue * k_threshold);
   }
 
