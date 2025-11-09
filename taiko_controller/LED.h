@@ -5,9 +5,11 @@
 
 CRGB leds[NUM_LEDS];
 CRGB RED = CRGB(128,0,0);
+CRGB PINK = CRGB(192,0,0);
 CRGB BLUE = CRGB(0,0,128);
+CRGB CYAN = CRGB(0,0,192);
 CRGB BLACK = CRGB(0,0,0);
-CRGB led_colors[] = {BLUE,RED,RED,BLUE};
+CRGB led_colors[] = {BLUE,RED,PINK,CYAN};
 
 //LED settings.
 uint8_t firstled[4] = {0, 9, 21, NUM_LEDS};  //middle, right, left

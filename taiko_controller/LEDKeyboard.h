@@ -19,14 +19,14 @@ public:
   
   void press(uint8_t index) {
     if (keyIsDown[index]) return;
-    Keyboard.press(keys[index]);
+    // Keyboard.press(keys[index]);
     UpdateLEDColor(index, true);
     keyIsDown[index] = true;
   }
   
   void release(uint8_t index) {
     if (!keyIsDown[index]) return;
-    Keyboard.release(keys[index]);
+    // Keyboard.release(keys[index]);
     UpdateLEDColor(index, false);
     keyIsDown[index] = false;
   }

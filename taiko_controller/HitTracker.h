@@ -3,25 +3,32 @@
 
 #include <Arduino.h>
 
+float getMaxValue(float* values, size_t length)
+{
+  float maxVal = values[0];
+  for (size_t i = 1; i < length; ++i) {
+    if (values[i] > maxVal) {
+      maxVal = values[i];
+    }
+  }
+  return maxVal;
+}
+
 class HitTracker {
 private:
   static const long ACTIVE_TIME = 50000; // 50000us = 5ms
   
-  int counters[4] = {0, 0, 0, 0};
+  float counters[4] = {0, 0, 0, 0};
   long activeTimeRemaining = 0;
   
 public:
   HitTracker() {}
-  
-  void track(int v0, int v1, int v2, int v3) {
+
+  void track(float v0, float v1, float v2, float v3) {
     counters[0] = max(counters[0], v0);
     counters[1] = max(counters[1], v1);
     counters[2] = max(counters[2], v2);
     counters[3] = max(counters[3], v3);
-    
-    if (activeTimeRemaining == 0) {
-      activeTimeRemaining = ACTIVE_TIME;
-    }
   }
   
   void update(long deltaTime) {
@@ -33,12 +40,12 @@ public:
   }
   
   bool isDone() const {
-    return !isActive();
+    return activeTimeRemaining == 0;
   }
   
   uint8_t getMaxIndex() const {
     uint8_t maxIdx = 0;
-    int maxVal = counters[0];
+    float maxVal = counters[0];
     
     for (uint8_t i = 1; i < 4; i++) {
       if (counters[i] > maxVal) {
@@ -49,9 +56,9 @@ public:
     
     return maxIdx;
   }
-  
-  int getMaxValue() const {
-    int maxVal = counters[0];
+
+  float getMaxValue() const {
+    float maxVal = counters[0];
     for (uint8_t i = 1; i < 4; i++) {
       if (counters[i] > maxVal) {
         maxVal = counters[i];
@@ -60,12 +67,13 @@ public:
     return maxVal;
   }
   
-  void reset() {
-    counters[0] = 0;
-    counters[1] = 0;
-    counters[2] = 0;
-    counters[3] = 0;
-    activeTimeRemaining = 0;
+  void startTracking(float v0, float v1, float v2, float v3) {
+    track(v0,v1,v2,v3);
+    activeTimeRemaining = ACTIVE_TIME;
+  }
+
+  float getCounter(uint8_t index) const {
+    return counters[index];
   }
 };
 
