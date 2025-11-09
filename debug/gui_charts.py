@@ -232,7 +232,7 @@ class TaikoChartApp:
         dpg.fit_axis_data("raw_x_axis")
         dpg.set_axis_limits("raw_y_axis", 0, 1024)  # Fixed scale for raw values
         dpg.fit_axis_data("sensor_x_axis") 
-        dpg.set_axis_limits("sensor_y_axis", -120, 120)
+        dpg.fit_axis_data("sensor_y_axis")
         dpg.fit_axis_data("keys_x_axis")
         dpg.fit_axis_data("thresh_x_axis")
         dpg.fit_axis_data("thresh_y_axis")

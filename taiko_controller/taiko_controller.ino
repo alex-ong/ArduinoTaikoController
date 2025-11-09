@@ -7,14 +7,14 @@
 #define DEBUG_STATE
 
 const float min_threshold = 20;
-const long cd_length = 50000;
+const long cd_length = 80000;
 const float k_threshold = 3.0;
-const float k_decay = 0.9;
+const float k_decay = 0.95;
 
 const int pin[4] = {A2, A0, A1, A3};
 const int key[4] = {'d', 'f', 'j', 'k'};
 
-const float sens[4] = {1.0, 1.4, 1.2, 1.1};
+const float sens[4] = {1.0, 1.0, 0.4, 1.0};
 
 float threshold = 0;
 int rawValues[4] = {0, 0, 0, 0};
@@ -29,23 +29,18 @@ time_t timeAtStartOfRefresh = 0;
 time_t deltaTime = 0;
 
 void SamplePiezos() {
-  int prev[4] = {rawValues[0], rawValues[1], rawValues[2], rawValues[3]};
-  rawValues[0] = analogRead(pin[0]);
-  rawValues[1] = analogRead(pin[1]);
-  rawValues[2] = analogRead(pin[2]);
-  rawValues[3] = analogRead(pin[3]);
-  
-  // this bit here is a weird...
-  // its a decay thing...
-  for (int i=0; i<4; ++i) {
-    sensorValues[i] = abs(rawValues[i] - prev[i]) * sens[i];
+  for (int i = 0; i < 4; i++) {
+    int prev = rawValues[i];
+    rawValues[i] = analogRead(pin[i]);
+    sensorValues[i] = abs(rawValues[i] - prev) * sens[i];
   }
 }
 
 // returns cooldown
 inline long update_cooldown(time_t deltaTime)
 {
-  cooldown = max(0L, cooldown - deltaTime);
+  // Typecast deltaTime to long to avoid unsigned-long and long subtraction issue
+  cooldown = max(0L, cooldown - (long)deltaTime);
   if (cooldown == 0) ledKeyboard.release_all();
   return cooldown;
 }
@@ -104,7 +99,6 @@ void loop() {
   
   if (update_cooldown(deltaTime) != 0)
   {
-     threshold = 69;
      endloop();
      return;
   }
@@ -112,14 +106,14 @@ void loop() {
   if (hitTracker.isActive())
   {
     hitTracker.track(sensorValues[0], sensorValues[1], sensorValues[2],sensorValues[3]);
-    hitTracker.update(deltaTime);
+    hitTracker.update((long)deltaTime);
     if (hitTracker.isDone())
     {
       uint8_t maxIdx = hitTracker.getMaxIndex();
       ledKeyboard.press(maxIdx);
       cooldown = cd_length;  // Start cooldown after pressing
+      hitTracker.reset();
     } else {
-      threshold = 120;
       endloop();
       return;
     }
@@ -132,7 +126,6 @@ void loop() {
     threshold = maxSensorValue;
   }
   
-  threshold = 100;
   endloop();
 }
 

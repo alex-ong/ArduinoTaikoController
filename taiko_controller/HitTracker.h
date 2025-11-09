@@ -16,7 +16,7 @@ float getMaxValue(float* values, size_t length)
 
 class HitTracker {
 private:
-  static const long ACTIVE_TIME = 50000; // 50000us = 5ms
+  static const long ACTIVE_TIME = 15000; // 15000us = 15ms
   
   float counters[4] = {0, 0, 0, 0};
   long activeTimeRemaining = 0;
@@ -68,8 +68,16 @@ public:
   }
   
   void startTracking(float v0, float v1, float v2, float v3) {
-    track(v0,v1,v2,v3);
+    counters[0] = v0;
+    counters[1] = v1;
+    counters[2] = v2;
+    counters[3] = v3;
     activeTimeRemaining = ACTIVE_TIME;
+  }
+  void reset() {
+    for (uint8_t i = 0; i < 4; i++) {
+      counters[i] = 0;
+    }
   }
 
   float getCounter(uint8_t index) const {
