@@ -7,6 +7,7 @@ This module provides functions to list and select COM ports for serial communica
 import serial
 import serial.tools.list_ports
 from typing import Optional, List
+import sys
 
 
 def list_available_ports() -> List[serial.tools.list_ports.ListPortInfo]:
@@ -35,11 +36,19 @@ def select_com_port() -> Optional[str]:
     Returns:
         Selected COM port device name (e.g., "COM3") or None if cancelled.
     """
+    # Check if port was specified as command line argument
+    
     ports = list_available_ports()
     
     if not ports:
         return None
     
+    if len(sys.argv) > 1:
+        specified_port = sys.argv[1]
+        for port in ports:
+            if port.device == specified_port:
+                return port.device
+
     while True:
         try:
             choice = input(f"\nSelect port (1-{len(ports)}): ").strip()

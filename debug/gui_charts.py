@@ -28,7 +28,7 @@ class TaikoChartApp:
     - Automatic scaling and scrolling
     """
     
-    def __init__(self, com_port: str, time_window_seconds: float = 10.0):
+    def __init__(self, com_port: str, time_window_seconds: float = 4.0):
         """Initialize the chart application."""
         self.com_port = com_port
         self.time_window_seconds = time_window_seconds
@@ -228,9 +228,9 @@ class TaikoChartApp:
         threshold_values = [entry.parsed_data.threshold for entry in current_data]
         dpg.set_value(self.chart_series["threshold"], [time_offsets, threshold_values])
         
-        # Auto-scale axes (except keys which are fixed)
+        # Auto-scale axes (except keys and raw which are fixed)
         dpg.fit_axis_data("raw_x_axis")
-        dpg.fit_axis_data("raw_y_axis")
+        dpg.set_axis_limits("raw_y_axis", 0, 1024)  # Fixed scale for raw values
         dpg.fit_axis_data("sensor_x_axis") 
         dpg.fit_axis_data("sensor_y_axis")
         dpg.fit_axis_data("keys_x_axis")
